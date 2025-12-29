@@ -67,5 +67,11 @@ namespace MCPForUnity.Editor.Services
         /// Invalidates the tool discovery cache
         /// </summary>
         void InvalidateCache();
+
+        /// <summary>
+        /// Lazily loads detailed metadata (AssetPath, enriched Description) for UI display.
+        /// Call this before displaying tool details to populate expensive fields.
+        /// </summary>
+        void LoadDetailedMetadata(ToolMetadata metadata);
     }
 }

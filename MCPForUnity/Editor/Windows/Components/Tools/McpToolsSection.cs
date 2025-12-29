@@ -146,6 +146,9 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
 
         private VisualElement CreateToolRow(ToolMetadata tool)
         {
+            // Load detailed metadata (AssetPath, enriched Description) for UI display
+            MCPServiceLocator.ToolDiscovery.LoadDetailedMetadata(tool);
+
             var row = new VisualElement();
             row.AddToClassList("tool-item");
 

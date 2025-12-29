@@ -13,8 +13,9 @@ namespace MCPForUnity.Editor.Services
     public class ToolDiscoveryService : IToolDiscoveryService
     {
         private Dictionary<string, ToolMetadata> _cachedTools;
+        private readonly Dictionary<string, Type> _toolTypeCache = new();
         private readonly Dictionary<Type, string> _scriptPathCache = new();
-    private readonly Dictionary<string, string> _summaryCache = new();
+        private readonly Dictionary<string, string> _summaryCache = new();
 
         public List<ToolMetadata> DiscoverAllTools()
         {
@@ -44,6 +45,7 @@ namespace MCPForUnity.Editor.Services
                         if (metadata != null)
                         {
                             _cachedTools[metadata.Name] = metadata;
+                            _toolTypeCache[metadata.Name] = type;
                             EnsurePreferenceInitialized(metadata);
                         }
                     }
@@ -131,21 +133,13 @@ namespace MCPForUnity.Editor.Services
                     ClassName = type.Name,
                     Namespace = type.Namespace ?? "",
                     AssemblyName = type.Assembly.GetName().Name,
-                    AssetPath = ResolveScriptAssetPath(type),
+                    AssetPath = null,
                     AutoRegister = toolAttr.AutoRegister,
                     RequiresPolling = toolAttr.RequiresPolling,
                     PollAction = string.IsNullOrEmpty(toolAttr.PollAction) ? "status" : toolAttr.PollAction
                 };
 
                 metadata.IsBuiltIn = DetermineIsBuiltIn(type, metadata);
-                if (metadata.IsBuiltIn)
-                {
-                    string summaryDescription = ExtractSummaryDescription(type, metadata);
-                    if (!string.IsNullOrWhiteSpace(summaryDescription))
-                    {
-                        metadata.Description = summaryDescription;
-                    }
-                }
                 return metadata;
                 
             }
@@ -233,6 +227,47 @@ namespace MCPForUnity.Editor.Services
         public void InvalidateCache()
         {
             _cachedTools = null;
+            _toolTypeCache.Clear();
+            _scriptPathCache.Clear();
+            _summaryCache.Clear();
+        }
+
+        public void LoadDetailedMetadata(ToolMetadata metadata)
+        {
+            if (metadata == null || string.IsNullOrEmpty(metadata.Name))
+            {
+                return;
+            }
+
+            // Skip if already loaded
+            if (!string.IsNullOrEmpty(metadata.AssetPath))
+            {
+                return;
+            }
+
+            // Only load detailed metadata for built-in tools
+            if (!metadata.IsBuiltIn)
+            {
+                return;
+            }
+
+            if (!_toolTypeCache.TryGetValue(metadata.Name, out var type))
+            {
+                return;
+            }
+
+            // Resolve asset path (expensive)
+            metadata.AssetPath = ResolveScriptAssetPath(type);
+
+            // Extract XML summary description if available
+            if (!string.IsNullOrEmpty(metadata.AssetPath))
+            {
+                string summaryDescription = ExtractSummaryDescription(type, metadata);
+                if (!string.IsNullOrWhiteSpace(summaryDescription))
+                {
+                    metadata.Description = summaryDescription;
+                }
+            }
         }
 
         private void EnsurePreferenceInitialized(ToolMetadata metadata)
@@ -317,38 +352,8 @@ namespace MCPForUnity.Editor.Services
 
         private bool DetermineIsBuiltIn(Type type, ToolMetadata metadata)
         {
-            if (metadata == null)
-            {
-                return false;
-            }
-
-            if (!string.IsNullOrEmpty(metadata.AssetPath))
-            {
-                string normalizedPath = metadata.AssetPath.Replace("\\", "/");
-                string packageRoot = AssetPathUtility.GetMcpPackageRootPath();
-
-                if (!string.IsNullOrEmpty(packageRoot))
-                {
-                    string normalizedRoot = packageRoot.Replace("\\", "/");
-                    if (!normalizedRoot.EndsWith("/", StringComparison.Ordinal))
-                    {
-                        normalizedRoot += "/";
-                    }
-
-                    string builtInRoot = normalizedRoot + "Editor/Tools/";
-                    if (normalizedPath.StartsWith(builtInRoot, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            if (!string.IsNullOrEmpty(metadata.AssemblyName) && metadata.AssemblyName.Equals("MCPForUnity.Editor", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            return false;
+            return !string.IsNullOrEmpty(metadata.AssemblyName) 
+                && metadata.AssemblyName.Equals("MCPForUnity.Editor", StringComparison.Ordinal);
         }
 
         private string ExtractSummaryDescription(Type type, ToolMetadata metadata)
