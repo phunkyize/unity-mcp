@@ -161,9 +161,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                 }
             }
             EditorApplication.quitting += Stop;
-            EditorApplication.playModeStateChanged += _ =>
+            EditorApplication.playModeStateChanged += state =>
             {
-                if (ShouldAutoStartBridge())
+                if (state == PlayModeStateChange.EnteredEditMode && ShouldAutoStartBridge())
                 {
                     ScheduleInitRetry();
                 }
